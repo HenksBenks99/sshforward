@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Lint with ruff (optional)
+      run: |
+        pip install ruff
+        ruff check sshforward.py --select=E,F,W --ignore=E501 || true
+
+    - name: Run syntax check
+      run: |
+        python -m py_compile sshforward.py
+
+    - name: Build executable with PyInstaller
+      run: |
+        pyinstaller sshforward.spec --clean
+
+    - name: Verify executable exists
+      run: |
+        ls -la dist/sshforward.exe
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: sshforward-windows
+        path: dist/sshforward.exe
+        retention-days: 7
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Build executable with PyInstaller
+      run: |
+        pyinstaller sshforward.spec --clean
+
+    - name: Verify executable exists
+      run: |
+        ls -la dist/sshforward
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: sshforward-linux
+        path: dist/sshforward
+        retention-days: 7
+
+  release:
+    needs: [build-and-test, build-linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: sshforward-windows
+        path: release/windows
+
+    - name: Download Linux artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: sshforward-linux
+        path: release/linux
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          release/windows/sshforward.exe
+          release/linux/sshforward
+        generate_release_notes: true
