@@ -27,4 +27,7 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# SSH Forward config (contains credentials)
+sshforward_config.json
 </content>
