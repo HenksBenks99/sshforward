@@ -15,7 +15,6 @@ La password viene caricata in questo ordine:
 Esempio di file sshforward_config.json:
   {
     "password": "LaTuaPasswordQui",
-    "host": "192.168.1.10",
     "username": "pi"
   }
 """
@@ -56,7 +55,8 @@ def load_secure_config() -> dict:
         3. Nessun valore (ritorna dict vuoto)
 
     Returns:
-        Dizionario con le chiavi 'password', 'host', 'username' se trovate.
+        Dizionario con le chiavi 'password', 'username' se trovate.
+        NOTA: L'host NON viene mai caricato dal file config, deve essere inserito manualmente.
     """
     config = {}
 
@@ -75,7 +75,9 @@ def load_secure_config() -> dict:
                 file_config = json.load(f)
             if isinstance(file_config, dict):
                 # Il file ha priorità sulla variabile d'ambiente se esplicitamente impostato
-                config.update(file_config)
+                # NOTA: L'host NON viene mai caricato dal file config per sicurezza e flessibilità
+                file_config_filtered = {k: v for k, v in file_config.items() if k != "host"}
+                config.update(file_config_filtered)
         except (json.JSONDecodeError, OSError) as e:
             logging.error(f"Errore lettura file configurazione: {e}")
 
@@ -466,11 +468,8 @@ class SSHForwarderApp:
         """
         config = load_secure_config()
 
-        has_credentials = any(config.get(k) for k in ("host", "username", "password"))
-
-        if "host" in config and config["host"]:
-            self.ent_ssh_host.delete(0, "end")
-            self.ent_ssh_host.insert(0, config["host"])
+        # NOTE: L'host NON viene mai caricato dal file config, deve sempre essere inserito manualmente
+        has_user_pass = any(config.get(k) for k in ("username", "password"))
 
         if "username" in config and config["username"]:
             self.ent_ssh_user.delete(0, "end")
@@ -480,13 +479,12 @@ class SSHForwarderApp:
             self.ent_ssh_pass.delete(0, "end")
             self.ent_ssh_pass.insert(0, config["password"])
 
-        if has_credentials:
-            # Disabilita i campi e mostra l'avviso
-            self.ent_ssh_host.configure(state="disabled")
+        if has_user_pass:
+            # Disabilita SOLO username e password, MA NON l'host
             self.ent_ssh_user.configure(state="disabled")
             self.ent_ssh_pass.configure(state="disabled")
             self.lbl_cred_warning.configure(
-                text="Credenziali caricate dal file di configurazione esterno."
+                text="Username/Password caricati dal file di configurazione esterno. Host deve essere inserito manualmente."
             )
 
     def _build_mode_selection_section(self):
